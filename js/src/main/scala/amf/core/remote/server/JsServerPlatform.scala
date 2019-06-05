@@ -34,12 +34,8 @@ class JsServerPlatform extends JsPlatform {
     uri match {
       case File(path) =>
         operativeSystem() match {
-          case "win" =>
-            if (path.startsWith("/")) FILE_PROTOCOL + normalizeURL(path).substring(1)
-            else FILE_PROTOCOL + normalizeURL(withTrailingSlash(path)).substring(1)
-          case _ =>
-            if (path.startsWith("/")) FILE_PROTOCOL + normalizeURL(path)
-            else FILE_PROTOCOL + normalizeURL(withTrailingSlash(path)).substring(1)
+          case "win" => (FILE_PROTOCOL + normalizeURL(path)).replace("\\", "/") // TODO: with scala-common update replace for separator
+          case _ => FILE_PROTOCOL + normalizeURL(path)
         }
 
       case HttpParts(protocol, host, path) => protocol + host + normalizePath(withTrailingSlash(path))
