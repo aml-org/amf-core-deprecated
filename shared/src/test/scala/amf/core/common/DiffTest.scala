@@ -25,7 +25,7 @@ class DiffTest extends FunSuite with ListAssertions {
       ">     The door of all subtleties!\n"
 
     assertResult(out2) {
-      Diff.makeString(deltas)
+      Diff.makeString(deltas).replace("\r\n", "\n")
     }
 
     deltas.head.toString should startWith("Diff.Delta(0, c, 0, (  The")
@@ -51,7 +51,7 @@ class DiffTest extends FunSuite with ListAssertions {
       ">     They both may be called deep and profound.\n" +
       ">     Deeper and more profound\n" +
       ">     The door of all subtleties!\n"
-    Diff.makeString(deltas) shouldEqual out1
+    Diff.makeString(deltas).replace("\r\n", "\n") shouldEqual out1
   }
 
   test("Diff Strings By Line") {
