@@ -24,8 +24,12 @@ trait FileAssertionTest extends PlatformSecrets {
     expected.read().flatMap(_ => checkDiff(actual, expected))
   }
 
+  private def withTrailingSeparator(dir: String, char: Char): String = {
+    if(dir.endsWith(char.toString)) dir
+    else dir.concat(char.toString)
+  }
+
   /** Return random temporary file name for testing. */
   def tmp(name: String = ""): String =
-    (platform.tmpdir() + platform.fs.separatorChar + System.nanoTime() + "-" + name)
-      .replaceAll(s"${platform.fs.separatorChar}${platform.fs.separatorChar}", s"${platform.fs.separatorChar}")
+    withTrailingSeparator(platform.tmpdir(), platform.fs.separatorChar) + System.nanoTime() + "-" + name
 }
