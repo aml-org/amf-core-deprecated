@@ -28,8 +28,7 @@ class PlatformTest extends AsyncFunSuite with ListAssertions with PlatformSecret
                      |  - 2
                      |d: !include includes/include2.yaml""".stripMargin
 
-        // TODO: replace for fs.separatorChar when fixed for JS
-        content.sourceName.replace("\\","/") should be("shared/src/test/resources/input.yaml")
+        content.sourceName.replace(platform.fs.separatorChar.toString,"/") should be("shared/src/test/resources/input.yaml")
     }
   }
 
