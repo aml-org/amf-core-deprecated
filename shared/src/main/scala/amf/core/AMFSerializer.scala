@@ -12,7 +12,7 @@ import amf.core.registries.AMFPluginsRegistry
 import amf.core.remote.{Platform, Vendor}
 import amf.core.services.RuntimeSerializer
 import amf.plugins.document.graph.AMFGraphPlugin.platform
-import amf.plugins.document.graph.parser.JsonLdEmitter
+import amf.plugins.document.graph.parser.{JsonLdEmitter}
 import amf.plugins.syntax.RdfSyntaxPlugin
 import org.mulesoft.common.io.Output
 import org.mulesoft.common.io.Output._
@@ -49,8 +49,7 @@ class AMFSerializer(unit: BaseUnit, mediaType: String, vendor: String, options: 
     if (vendor == Vendor.AMF.name) {
       if (!options.isAmfJsonLdSerilization) parseRdf(writer)
       else {
-        val b = JsonOutputBuilder[W](writer, options.isPrettyPrint)
-        JsonLdEmitter.emit(unit, b, options)
+        platform.emitJSON(unit, writer, options)
       }
       return
     }

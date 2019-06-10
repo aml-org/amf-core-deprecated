@@ -1,6 +1,7 @@
 package amf.plugins.document.graph.parser
 
 import amf.core.annotations._
+import amf.core.benchmark.ExecutionLog
 import amf.core.emitter.RenderOptions
 import amf.core.metamodel.Type.{Any, Array, Bool, EncodedIri, Iri, LiteralUri, SortedArray, Str}
 import amf.core.metamodel.document.{ModuleModel, SourceMapModel}
@@ -24,7 +25,9 @@ import scala.collection.mutable.ListBuffer
 object JsonLdEmitter {
 
   def emit[T](unit: BaseUnit, builder: DocBuilder[T], renderOptions: RenderOptions = RenderOptions()): Boolean = {
+    ExecutionLog.log("JsonLdEmitter#emit: Emitting JSON-LD")
     new JsonLdEmitter[T](builder, renderOptions).root(unit)
+    ExecutionLog.log("JsonLdEmitter#emit: Emitted!")
     true
   }
 }
@@ -550,10 +553,12 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions) e
     if (inArray) emit(b) else b.list(emit)
   }
 
-  private def createIdNode(b: Entry, id: String, ctx: EmissionContext): Unit = b.entry(
-    "@id",
-    raw(_, ctx.emitId(id))
-  )
+  private def createIdNode(b: Entry, id: String, ctx: EmissionContext): Unit = {
+    b.entry(
+      "@id",
+      raw(_, ctx.emitId(id))
+    )
+  }
 
   private def createTypeNode(b: Entry, obj: Obj, maybeElement: Option[AmfObject] = None, ctx: EmissionContext): Unit = {
     b.entry(

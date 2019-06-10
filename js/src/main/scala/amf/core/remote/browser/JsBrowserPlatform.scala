@@ -1,8 +1,11 @@
 package amf.core.remote.browser
 
+import amf.core.emitter.RenderOptions
+import amf.core.model.document.BaseUnit
 import amf.internal.resource.{ResourceLoader, ResourceLoaderAdapter}
 import amf.core.remote._
-import org.mulesoft.common.io.FileSystem
+import amf.plugins.document.graph.parser.ScalaJSJsonLdEmitter
+import org.mulesoft.common.io.{FileSystem, Output}
 
 import scala.scalajs.js.annotation.JSExportAll
 
@@ -26,6 +29,9 @@ class JsBrowserPlatform extends JsPlatform {
 
   override def resolvePath(path: String): String = path
 
+  override def emitJSON[W: Output](unit: BaseUnit, writer: W, renderOptions: RenderOptions): Boolean = {
+    ScalaJSJsonLdEmitter.emit(unit, writer, renderOptions)
+  }
 }
 
 @JSExportAll

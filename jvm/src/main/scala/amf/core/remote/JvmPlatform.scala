@@ -2,9 +2,13 @@ package amf.core.remote
 import java.net.URI
 
 import amf.client.resource.{FileResourceLoader, HttpResourceLoader}
+import amf.core.emitter.RenderOptions
+import amf.core.model.document.BaseUnit
 import amf.core.unsafe.PlatformBuilder
 import amf.internal.resource.{ResourceLoader, ResourceLoaderAdapter}
-import org.mulesoft.common.io.{FileSystem, Fs}
+import amf.plugins.document.graph.parser.JsonLdEmitter
+import org.mulesoft.common.io.{FileSystem, Fs, Output}
+import org.yaml.builder.JsonOutputBuilder
 
 class JvmPlatform extends Platform {
 
@@ -72,6 +76,11 @@ class JvmPlatform extends Platform {
       case os if os.contains("mac") => "mac"
       case _                        => "nux"
     }
+  }
+
+  override def emitJSON[W: Output](unit: BaseUnit, writer: W, renderOptions: RenderOptions): Boolean = {
+    val b = JsonOutputBuilder[W](writer, renderOptions.isPrettyPrint)
+    JsonLdEmitter.emit(unit, b, renderOptions)
   }
 }
 

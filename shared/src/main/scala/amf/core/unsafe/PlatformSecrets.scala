@@ -1,6 +1,7 @@
 package amf.core.unsafe
 
 import amf.client.remote.Content
+import amf.core.emitter.RenderOptions
 import amf.core.model.document.BaseUnit
 import amf.core.rdf.RdfModel
 import amf.core.remote.{Platform, UnsupportedFileSystem}
@@ -8,7 +9,9 @@ import amf.core.services.ValidationOptions
 import amf.core.validation.core.{SHACLValidator, ValidationReport, ValidationSpecification}
 import amf.internal.environment.Environment
 import amf.internal.resource.ResourceLoader
-import org.mulesoft.common.io.FileSystem
+import amf.plugins.document.graph.parser.JsonLdEmitter
+import org.mulesoft.common.io.{FileSystem, Output}
+import org.yaml.builder.JsonOutputBuilder
 
 import scala.concurrent.Future
 
@@ -101,4 +104,9 @@ case class TrunkPlatform(content: String,
 
   /** Return the OS (win, mac, nux). */
   override def operativeSystem(): String = "trunk"
+
+  override def emitJSON[W: Output](unit: BaseUnit, writer: W, renderOptions: RenderOptions): Boolean = {
+    val b = JsonOutputBuilder[W](writer, renderOptions.isPrettyPrint)
+    JsonLdEmitter.emit(unit, b, renderOptions)
+  }
 }

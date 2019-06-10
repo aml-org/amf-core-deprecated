@@ -1,10 +1,13 @@
 package amf.core.remote.server
 
+import amf.core.emitter.RenderOptions
+import amf.core.model.document.BaseUnit
 import amf.internal.resource.{ResourceLoader, ResourceLoaderAdapter}
 import amf.core.remote.File.FILE_PROTOCOL
 import amf.core.remote._
 import amf.core.remote.server.JsServerPlatform.OS
-import org.mulesoft.common.io.{FileSystem, Fs}
+import amf.plugins.document.graph.parser.ScalaJSJsonLdEmitter
+import org.mulesoft.common.io.{FileSystem, Fs, Output}
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.{JSExportAll, JSImport}
@@ -56,6 +59,10 @@ class JsServerPlatform extends JsPlatform {
       case so if so.contains("win")    => "win"
       case _                           => "nux"
     }
+  }
+
+  override def emitJSON[W: Output](unit: BaseUnit, writer: W, renderOptions: RenderOptions): Boolean = {
+    ScalaJSJsonLdEmitter.emit(unit, writer, renderOptions)
   }
 }
 

@@ -2,6 +2,7 @@ package amf.core.remote
 
 import amf.client.model.AmfObjectWrapper
 import amf.client.remote.Content
+import amf.core.emitter.RenderOptions
 import amf.core.metamodel.Obj
 import amf.core.model.document.BaseUnit
 import amf.core.model.domain.{AmfObject, DomainElement}
@@ -9,7 +10,7 @@ import amf.core.rdf.RdfFramework
 import amf.core.vocabulary.Namespace
 import amf.internal.environment.Environment
 import amf.internal.resource.ResourceLoader
-import org.mulesoft.common.io.{AsyncFile, FileSystem, SyncFile}
+import org.mulesoft.common.io.{AsyncFile, FileSystem, Output, SyncFile}
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -55,6 +56,8 @@ trait Platform extends FileMediaType {
   def stderr(text: String): Unit = System.err.println(text)
 
   def stderr(ex: Exception): Unit = System.err.println(ex)
+
+  def emitJSON[W: Output](unit: BaseUnit, writer: W, renderOptions: RenderOptions = RenderOptions()): Boolean
 
   val wrappersRegistry: mutable.HashMap[String, (AmfObject) => AmfObjectWrapper]             = mutable.HashMap.empty
   val wrappersRegistryFn: mutable.HashMap[(Obj) => Boolean, (AmfObject) => AmfObjectWrapper] = mutable.HashMap.empty
