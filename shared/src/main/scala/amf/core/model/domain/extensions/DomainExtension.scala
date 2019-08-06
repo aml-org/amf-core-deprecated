@@ -3,15 +3,15 @@ package amf.core.model.domain.extensions
 import amf.core.metamodel.domain.extensions.DomainExtensionModel
 import amf.core.metamodel.domain.extensions.DomainExtensionModel.{DefinedBy, Element, Extension, Name}
 import amf.core.model.StrField
-import amf.core.model.domain.{DataNode, DomainElement}
+import amf.core.model.domain.{DataNode, DomainElement, Shape}
 import amf.core.parser.{Annotations, Fields}
 import org.yaml.model.YPart
 
-case class DomainExtension(fields: Fields, annotations: Annotations) extends DomainElement {
+case class DomainExtension(fields: Fields, annotations: Annotations) extends Extension {
 
   def name: StrField                  = fields.field(Name)
   def definedBy: CustomDomainProperty = fields.field(DefinedBy)
-  def extension: DataNode             = fields.field(Extension)
+  def obtainSchema: Shape             = definedBy.schema
   def element: StrField               = fields.field(Element)
 
   def withDefinedBy(customProperty: CustomDomainProperty): this.type = set(DefinedBy, customProperty)

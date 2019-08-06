@@ -1,17 +1,18 @@
 package amf.core.model.domain.extensions
 
 import amf.core.metamodel.domain.extensions.ShapeExtensionModel
-import amf.core.model.domain.{DataNode, DomainElement}
+import amf.core.model.domain.{DataNode, DomainElement, Shape}
 import amf.core.metamodel.domain.extensions.ShapeExtensionModel._
 import amf.core.parser.{Annotations, Fields}
 import org.yaml.model.YPart
+import amf.core.utils.Strings
 
-case class ShapeExtension(fields: Fields, annotations: Annotations) extends DomainElement {
+case class ShapeExtension(fields: Fields, annotations: Annotations) extends Extension {
 
   id = "http://a.ml/vocabularies#document/shape_extension"
 
   def definedBy: PropertyShape = fields.field(DefinedBy)
-  def extension: DataNode      = fields.field(Extension)
+  def obtainSchema: Shape      = definedBy.range
 
   def withDefinedBy(customProperty: PropertyShape): this.type =
     set(DefinedBy, customProperty)
@@ -24,7 +25,8 @@ case class ShapeExtension(fields: Fields, annotations: Annotations) extends Doma
   // for the extension point. ID is not required for serialisation
 
   /** Value , path + field value that is used to compose the id when the object its adopted */
-  override def componentId: String = "/shapeExtension"
+  override def componentId: String = "/shape-extension/" +
+    Option(definedBy).flatMap(_.name.option()).getOrElse("default-extension").urlComponentEncoded
 }
 
 object ShapeExtension {
