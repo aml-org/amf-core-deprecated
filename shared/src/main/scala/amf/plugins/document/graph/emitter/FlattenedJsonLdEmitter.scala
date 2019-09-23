@@ -22,19 +22,23 @@ import org.yaml.builder.DocBuilder.{Entry, Part, SType, Scalar}
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
-object JsonLdEmitter {
+object FlattenedJsonLdEmitter {
 
   def emit[T](unit: BaseUnit, builder: DocBuilder[T], renderOptions: RenderOptions = RenderOptions()): Boolean = {
     implicit val ctx: EmissionContext = EmissionContext(unit, renderOptions)
-    new JsonLdEmitter[T](builder, renderOptions).root(unit)
+    new FlattenedJsonLdEmitter[T](builder, renderOptions).root(unit)
     true
   }
 }
 
-class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(implicit ctx: EmissionContext)
+case class EmissionFn[T](fn: Part[T] => Unit)
+
+class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(implicit ctx: EmissionContext)
     extends MetaModelTypeMapping {
 
-  val cache: mutable.Map[String, T] = mutable.Map[String, T]()
+  val pending: mutable.Queue[Either[AmfObject, EmissionFn[T]]] = mutable.Queue.empty
+  val seenIds: mutable.HashSet[String]                         = mutable.HashSet.empty
+  var root: Part[T]                                            = _
 
   def root(unit: BaseUnit): Unit = {
     val entry: Option[FieldEntry]      = unit.fields.entry(ModuleModel.Declares)
@@ -42,13 +46,25 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
     ctx ++ elements
     unit.fields.removeField(ModuleModel.Declares)
 
-    builder.list {
-      _.obj { eb =>
-        traverse(unit, eb)
-        emitDeclarations(eb, unit.id, SourceMap(unit.id, unit))
-        entry.foreach(e => unit.fields.setWithoutId(ModuleModel.Declares, e.array))
-        ctx.emitContext(eb)
-      }
+    builder.obj { ob =>
+      ob.entry(
+        "@graph",
+        _.list { rootBuilder =>
+          root = rootBuilder
+
+          expandRoot(unit)
+
+          while (pending.nonEmpty) {
+            pending.dequeue() match {
+              case Left(obj)       => expandObject(obj)
+              case Right(emission) => emission.fn(rootBuilder)
+            }
+
+          }
+          entry.foreach(e => unit.fields.setWithoutId(ModuleModel.Declares, e.array))
+        }
+      )
+      ctx.emitContext(ob)
     }
   }
 
@@ -66,27 +82,58 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
     ctx.emittingDeclarations(false)
   }
 
-  def traverse(element: AmfObject, b: Entry[T]): Unit = {
-    val id = element.id
+  def expandRoot(unit: BaseUnit): Unit = {
+    val id = unit.id
 
-    createIdNode(b, id)
+    root.obj { b =>
+      createIdNode(b, id)
+      seenIds += id
+      emitDeclarations(b, unit.id, SourceMap(unit.id, unit))
 
-    val sources = SourceMap(id, element)
+      seenIds += id
+      val sources = SourceMap(id, unit)
+      val obj     = metaModel(unit)
+      traverseMetaModel(id, unit, sources, obj, b)
+      createCustomExtensions(unit, b)
 
-    val obj = metaModel(element)
+      val sourceMapId = if (id.endsWith("/")) {
+        id + "source-map"
+      } else if (id.contains("#") || id.startsWith("null")) {
+        id + "/source-map"
+      } else {
+        id + "#/source-map"
+      }
+      createSourcesNode(sourceMapId, sources, b)
 
-    traverseMetaModel(id, element, sources, obj, b)
-
-    createCustomExtensions(element, b)
-
-    val sourceMapId = if (id.endsWith("/")) {
-      id + "source-map"
-    } else if (id.contains("#") || id.startsWith("null")) {
-      id + "/source-map"
-    } else {
-      id + "#/source-map"
     }
-    createSourcesNode(sourceMapId, sources, b)
+
+  }
+
+  def expandObject(amfObject: AmfObject): Unit = {
+    val id = amfObject.id
+
+    root.obj { b =>
+      createIdNode(b, id)
+
+      seenIds += id
+      val sources = SourceMap(id, amfObject)
+
+      val obj = metaModel(amfObject)
+
+      traverseMetaModel(id, amfObject, sources, obj, b)
+
+      createCustomExtensions(amfObject, b)
+
+      val sourceMapId = if (id.endsWith("/")) {
+        id + "source-map"
+      } else if (id.contains("#") || id.startsWith("null")) {
+        id + "/source-map"
+      } else {
+        id + "#/source-map"
+      }
+      createSourcesNode(sourceMapId, sources, b)
+
+    }
   }
 
   def traverseMetaModel(id: String, element: AmfObject, sources: SourceMap, obj: Obj, b: Entry[T]): Unit = {
@@ -190,17 +237,29 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
       _.obj { b =>
         b.entry(
           ctx.emitIri(DomainExtensionModel.Name.value.iri()),
-          listWithScalar(_, extension.name.value())
+          emitScalar(_, extension.name.value())
         )
         field.foreach(
           f =>
             b.entry(
               ctx.emitIri(DomainExtensionModel.Element.value.iri()),
-              listWithScalar(_, f.value.iri())
+              emitScalar(_, f.value.iri())
           ))
-        traverse(extension.extension, b)
+
+        expandIfNeeded(extension.extension)
       }
     )
+  }
+
+  private def expandIfNeeded(obj: AmfObject): Unit = {
+    val id = obj.id
+    val needToExpand = !seenIds.contains(id) && !pending.exists {
+      case Left(amfObject) => amfObject.id == id
+      case Right(_)        => false
+    }
+    if (needToExpand) {
+      pending.enqueue(Left(obj))
+    }
   }
 
   def createSortedArray(b: Part[T],
@@ -264,10 +323,10 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
 
   private def value(t: Type, v: Value, parent: String, sources: Value => Unit, b: Part[T]): Unit = {
     t match {
-      case _: ShapeModel
-          if v.value.annotations.contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx
-            .isDeclared(v.value)) && ctx.isDeclared(parent)) =>
-        extractToLink(v.value.asInstanceOf[Shape], b)
+//      case _: ShapeModel
+//          if v.value.annotations.contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclaration) || (ctx.emittingDeclaration && ctx
+//            .isDeclared(v.value)) && ctx.isDeclared(parent)) =>
+//        extractToLink(v.value.asInstanceOf[Shape], b)
       case t: DomainElement with Linkable if t.isLink =>
         link(b, t)
         sources(v)
@@ -284,20 +343,20 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
         typedScalar(b, v.value.asInstanceOf[AmfScalar].toString, DataType.AnyUri)
         sources(v)
       case Str =>
-        listWithScalar(b, v.value)
+        emitScalar(b, v.value)
         sources(v)
       case Bool =>
-        listWithScalar(b, v.value, SType.Bool)
+        emitScalar(b, v.value, SType.Bool)
         sources(v)
       case Type.Int =>
-        listWithScalar(b, v.value, SType.Int)
+        emitScalar(b, v.value, SType.Int)
         sources(v)
       case Type.Double =>
         // this will transform the value to double and will not emit @type TODO: ADD YType.Double
-        listWithScalar(b, v.value, SType.Float)
+        emitScalar(b, v.value, SType.Float)
         sources(v)
       case Type.Float =>
-        listWithScalar(b, v.value, SType.Float)
+        emitScalar(b, v.value, SType.Float)
         sources(v)
       case Type.DateTime =>
         val dateTime = v.value.asInstanceOf[AmfScalar].value.asInstanceOf[SimpleDateTime]
@@ -317,7 +376,7 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
 
             }
           case _ =>
-            listWithScalar(b, v.value)
+            emitScalar(b, v.value)
         }
         sources(v)
       case a: SortedArray =>
@@ -329,11 +388,11 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
           a.element match {
             case _: Obj =>
               seq.values.asInstanceOf[Seq[AmfObject]].foreach {
-                case v @ (_: Shape)
-                    if v.annotations
-                      .contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx
-                      .isDeclared(v) && ctx.isDeclared(parent))) =>
-                  extractToLink(v.asInstanceOf[Shape], b)
+//                case v @ (_: Shape)
+//                    if v.annotations
+//                      .contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclaration) || (ctx.emittingDeclaration && ctx
+//                      .isDeclared(v) && ctx.isDeclared(parent))) =>
+//                  extractToLink(v.asInstanceOf[Shape], b)
                 case elementInArray: DomainElement with Linkable if elementInArray.isLink =>
                   link(b, elementInArray, inArray = true)
                 case elementInArray =>
@@ -411,15 +470,12 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
     }
   }
 
-  private def obj(b: Part[T], element: AmfObject, inArray: Boolean = false): Unit = {
+  private def obj(b: Part[T], obj: AmfObject, inArray: Boolean = false): Unit = {
     def emit(b: Part[T]): Unit = {
-      cache.get(element.id) match {
-        case Some(value) => b.+=(value)
-        case None        => b.obj(traverse(element, _)).foreach(cache.put(element.id, _))
-      }
+      b.obj(createIdNode(_, obj.id))
+      expandIfNeeded(obj)
     }
-
-    if (inArray) emit(b) else b.list(emit)
+    emit(b)
   }
 
   private def extractToLink(shape: Shape, b: Part[T]): Unit = {
@@ -456,8 +512,10 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
         elementWithLink.set(LinkableElementModel.TargetId, target.id)
         elementWithLink.fields.removeField(LinkableElementModel.Target)
       }
+
+      // TODO maybe this is not right
       b.obj { o =>
-        traverse(elementWithLink, o)
+        expandIfNeeded(elementWithLink)
       }
       // we reset the link target after emitting
       savedLinkTarget.foreach { target =>
@@ -528,6 +586,7 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
           ctx.emitIri(DomainElementModel.Sources.value.iri()),
           _.list {
             _.obj { b =>
+              // TODO: Maybe this should be emitted in root
               createIdNode(b, id)
               createTypeNode(b, SourceMapModel, None)
               createAnnotationNodes(b, sources.annotations)
@@ -559,8 +618,16 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
           _.list {
             _.obj { b =>
               createIdNode(b, id)
-              createTypeNode(b, SourceMapModel, None)
-              createAnnotationNodes(b, sources.eternals)
+              if (!seenIds.contains(id)) {
+                val fn = EmissionFn((part: Part[T]) => {
+                  part.obj { rb =>
+                    createIdNode(rb, id)
+                    createTypeNode(rb, SourceMapModel, None)
+                    createAnnotationNodes(rb, sources.eternals)
+                  }
+                })
+                pending.enqueue(Right(fn))
+              }
             }
           }
         )
@@ -597,23 +664,24 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
     tuple match {
       case (iri, v) =>
         b.obj { b =>
-          b.entry(ctx.emitIri(SourceMapModel.Element.value.iri()), listWithScalar(_, iri))
-          b.entry(ctx.emitIri(SourceMapModel.Value.value.iri()), listWithScalar(_, v))
+          b.entry(ctx.emitIri(SourceMapModel.Element.value.iri()), emitScalar(_, iri))
+          b.entry(ctx.emitIri(SourceMapModel.Value.value.iri()), emitScalar(_, v))
         }
     }
 
   private def emitDateFormat(dateTime: SimpleDateTime) = dateTime.rfc3339
 
-  private def scalar(b: Part[T], content: String, t: SType): Unit = b.obj(_.entry("@value", Scalar(t, content)))
+  private def scalar(b: Part[T], content: String, t: SType): Unit = b += Scalar(t, content)
 
   private def scalar(b: Part[T], content: String): Unit = scalar(b, content, SType.Str)
+
   private def scalar(b: Part[T], content: AmfElement, t: SType): Unit =
     scalar(b, content.asInstanceOf[AmfScalar].value.toString, t)
 
-  private def listWithScalar(b: Part[T], content: String, t: SType): Unit = b.list(scalar(_, content, t))
-  private def listWithScalar(b: Part[T], content: String): Unit           = listWithScalar(b, content, SType.Str)
+  private def emitScalar(b: Part[T], content: String, t: SType): Unit = scalar(b, content, t)
+  private def emitScalar(b: Part[T], content: String): Unit           = emitScalar(b, content, SType.Str)
 
-  private def listWithScalar(b: Part[T], content: AmfElement, t: SType): Unit = b.list(scalar(_, content, t))
-  private def listWithScalar(b: Part[T], content: AmfElement): Unit           = listWithScalar(b, content, SType.Str)
+  private def emitScalar(b: Part[T], content: AmfElement, t: SType): Unit = scalar(b, content, t)
+  private def emitScalar(b: Part[T], content: AmfElement): Unit           = emitScalar(b, content, SType.Str)
 
 }

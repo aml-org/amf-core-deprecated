@@ -12,7 +12,7 @@ import amf.core.registries.AMFPluginsRegistry
 import amf.core.remote.{Platform, Vendor}
 import amf.core.services.RuntimeSerializer
 import amf.plugins.document.graph.AMFGraphPlugin.platform
-import amf.plugins.document.graph.emitter.JsonLdEmitter
+import amf.plugins.document.graph.emitter.{FlattenedJsonLdEmitter, JsonLdEmitter}
 import amf.plugins.syntax.RdfSyntaxPlugin
 import org.mulesoft.common.io.Output
 import org.mulesoft.common.io.Output._
@@ -36,7 +36,13 @@ class AMFSerializer(unit: BaseUnit,
 
   /** Render to doc builder. */
   def renderToBuilder[T](builder: DocBuilder[T])(implicit executor: ExecutionContext): Future[Unit] = Future {
-    if (vendor == Vendor.AMF.name) JsonLdEmitter.emit(unit, builder, options)
+    if (vendor == Vendor.AMF.name) {
+      if (options.isFlattenedJsonLd) {
+        FlattenedJsonLdEmitter.emit(unit,builder, options)
+      } else {
+        JsonLdEmitter.emit(unit, builder, options)
+      }
+    }
   }
 
   /** Print ast to writer. */
@@ -55,7 +61,11 @@ class AMFSerializer(unit: BaseUnit,
       if (!options.isAmfJsonLdSerilization) parseRdf(writer)
       else {
         val b = JsonOutputBuilder[W](writer, options.isPrettyPrint)
-        JsonLdEmitter.emit(unit, b, options)
+        if (options.isFlattenedJsonLd){
+          FlattenedJsonLdEmitter.emit(unit, b, options)
+        } else {
+          JsonLdEmitter.emit(unit, b, options)
+        }
       }
       return
     }

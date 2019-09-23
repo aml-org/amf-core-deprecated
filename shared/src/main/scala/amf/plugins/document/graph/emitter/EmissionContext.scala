@@ -13,7 +13,7 @@ import scala.collection.mutable
 class EmissionContext(val prefixes: mutable.Map[String, String],
                       var base: String,
                       val options: RenderOptions,
-                      var declares: Boolean = false) {
+                      var emittingDeclarations: Boolean = false) {
   var counter: Int = 1
 
   private val declarations: mutable.LinkedHashSet[AmfElement] = mutable.LinkedHashSet.empty
@@ -22,8 +22,8 @@ class EmissionContext(val prefixes: mutable.Map[String, String],
 
   def nextTypeName: String = typeCount.genId("amf_inline_type")
 
-  def declares(d: Boolean): this.type = {
-    declares = d
+  def emittingDeclarations(d: Boolean): this.type = {
+    emittingDeclarations = d
     this
   }
 
@@ -50,7 +50,14 @@ class EmissionContext(val prefixes: mutable.Map[String, String],
 
   def emitIri(uri: String): String = if (shouldCompact) compactAndCollect(uri) else uri
 
-  def emitId(uri: String): String = if (shouldCompact && uri.contains(base)) uri.replace(base, "") else uri
+  def emitId(uri: String): String = {
+    if (shouldCompact) {
+      if (uri == base) "./"
+      else uri.replace(base, "")
+    } else {
+      uri
+    }
+  }
 
   def setupContextBase(location: String): Unit = {
     if (Option(location).isDefined) {

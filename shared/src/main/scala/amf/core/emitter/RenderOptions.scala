@@ -1,9 +1,9 @@
 package amf.core.emitter
 
 import amf.client.render.{RenderOptions => ClientRenderOptions}
+import amf.client.resolve.ClientErrorHandlerConverter._
 import amf.core.metamodel.Field
 import amf.core.parser.{ErrorHandler, UnhandledErrorHandler}
-import amf.client.resolve.ClientErrorHandlerConverter._
 
 /**
   * Render options
@@ -17,6 +17,7 @@ class RenderOptions {
   private var filterFields: Field => Boolean = (_: Field) => false
   private var amfJsonLdSerialization         = true
   private var useJsonLdEmitter               = false
+  private var flattenedJsonLd                = true
   private var eh: ErrorHandler               = UnhandledErrorHandler
   private var prettyPrint                    = false
   private var emitNodeIds                    = false
@@ -101,7 +102,19 @@ class RenderOptions {
     eh = errorHandler
     this
   }
-  
+
+  def withFlattenedJsonLd: RenderOptions = {
+    flattenedJsonLd = true
+    this
+  }
+
+  def withoutFlattenedJsonLd: RenderOptions = {
+    flattenedJsonLd = false
+    this
+  }
+
+  def isFlattenedJsonLd: Boolean = flattenedJsonLd
+
   def isCompactUris: Boolean             = compactUris
   def isWithSourceMaps: Boolean          = sources
   def isWithRawSourceMaps: Boolean       = rawSourceMaps
@@ -123,6 +136,7 @@ object RenderOptions {
     opts.compactUris = client.isWithCompactUris
     opts.withErrorHandler(ErrorHandlerConverter.asInternal(client.errorHandler))
     opts.prettyPrint = client.isPrettyPrint
+    opts.flattenedJsonLd = client.isFlattenedJsonLd
     opts
   }
 }

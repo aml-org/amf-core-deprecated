@@ -3,7 +3,9 @@ package amf.client.model.document
 import amf.client.convert.CoreClientConverters._
 import amf.client.model.{AmfObjectWrapper, StrField}
 import amf.client.model.domain.DomainElement
+import amf.client.render.RenderOptions
 import amf.core.model.document.{BaseUnit => InternalBaseUnit}
+import amf.core.rdf.RdfModel
 import amf.core.remote.Vendor
 import amf.core.unsafe.PlatformSecrets
 import amf.core.vocabulary.Namespace
@@ -51,6 +53,11 @@ trait BaseUnit extends AmfObjectWrapper with PlatformSecrets {
   def withUsage(usage: String): this.type = {
     _internal.withUsage(usage)
     this
+  }
+
+  def toNativeRdfModel(renderOptions: RenderOptions = new RenderOptions()): RdfModel = {
+    val coreOptions = amf.core.emitter.RenderOptions(renderOptions)
+    _internal.toNativeRdfModel(coreOptions)
   }
 
   def findById(id: String): ClientOption[DomainElement] = _internal.findById(Namespace.uri(id).iri()).asClient

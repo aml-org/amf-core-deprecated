@@ -1,11 +1,10 @@
 package amf.client.render
 
-import amf.client.resolve.{ClientErrorHandler, ClientErrorHandlerConverter}
+import amf.client.resolve.ClientErrorHandler
+import amf.client.resolve.ClientErrorHandlerConverter._
+import amf.core.parser.UnhandledErrorHandler
 
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
-import amf.client.convert.CoreClientConverters._
-import ClientErrorHandlerConverter._
-import amf.core.parser.UnhandledErrorHandler
 
 /**
   * Render options
@@ -18,6 +17,7 @@ class RenderOptions {
   private var compactUris: Boolean   = false
   private var amfJsonLdSerialization = true
   private var prettyPrint            = false
+  private var flattenedJsonLd        = true
   private var eh: ClientErrorHandler = ErrorHandlerConverter.asClient(UnhandledErrorHandler)
   private var emitNodeIds            = false
 
@@ -59,6 +59,18 @@ class RenderOptions {
     eh = errorHandler
     this
   }
+
+  def withFlattenedJsonLd: RenderOptions = {
+    flattenedJsonLd = true
+    this
+  }
+
+  def withoutFlattenedJsonLd: RenderOptions = {
+    flattenedJsonLd = false
+    this
+  }
+
+  def isFlattenedJsonLd: Boolean = flattenedJsonLd
 
   /**
     * Emit specific AMF JSON-LD serialization
