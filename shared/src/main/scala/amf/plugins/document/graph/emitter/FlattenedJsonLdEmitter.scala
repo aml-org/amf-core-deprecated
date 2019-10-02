@@ -588,9 +588,17 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
             _.obj { b =>
               // TODO: Maybe this should be emitted in root
               createIdNode(b, id)
-              createTypeNode(b, SourceMapModel, None)
-              createAnnotationNodes(b, sources.annotations)
-              createAnnotationNodes(b, sources.eternals)
+              if (!seenIds.contains(id)) {
+                val fn = EmissionFn((part: Part[T]) => {
+                  part.obj { rb =>
+                    createIdNode(rb, id)
+                    createTypeNode(rb, SourceMapModel, None)
+                    createAnnotationNodes(rb, sources.annotations)
+                    createAnnotationNodes(rb, sources.eternals)
+                  }
+                })
+                pending.enqueue(Right(fn))
+              }
             }
           }
         )
