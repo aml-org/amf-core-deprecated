@@ -323,10 +323,11 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
 
   private def value(t: Type, v: Value, parent: String, sources: Value => Unit, b: Part[T]): Unit = {
     t match {
-//      case _: ShapeModel
-//          if v.value.annotations.contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclaration) || (ctx.emittingDeclaration && ctx
-//            .isDeclared(v.value)) && ctx.isDeclared(parent)) =>
-//        extractToLink(v.value.asInstanceOf[Shape], b)
+      case _: ShapeModel
+          if v.value.annotations.contains(classOf[ResolvedInheritance]) &&
+            ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx.isDeclared(v.value)) && ctx.isDeclared(
+              parent)) =>
+        extractToLink(v.value.asInstanceOf[Shape], b)
       case t: DomainElement with Linkable if t.isLink =>
         link(b, t)
         sources(v)
@@ -388,11 +389,11 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
           a.element match {
             case _: Obj =>
               seq.values.asInstanceOf[Seq[AmfObject]].foreach {
-//                case v @ (_: Shape)
-//                    if v.annotations
-//                      .contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclaration) || (ctx.emittingDeclaration && ctx
-//                      .isDeclared(v) && ctx.isDeclared(parent))) =>
-//                  extractToLink(v.asInstanceOf[Shape], b)
+                case v @ (_: Shape)
+                    if v.annotations
+                      .contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx
+                      .isDeclared(v) && ctx.isDeclared(parent))) =>
+                  extractToLink(v.asInstanceOf[Shape], b)
                 case elementInArray: DomainElement with Linkable if elementInArray.isLink =>
                   link(b, elementInArray, inArray = true)
                 case elementInArray =>
@@ -513,8 +514,8 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
         elementWithLink.fields.removeField(LinkableElementModel.Target)
       }
 
-      // TODO maybe this is not right
       b.obj { o =>
+        createIdNode(o, elementWithLink.id)
         expandIfNeeded(elementWithLink)
       }
       // we reset the link target after emitting
