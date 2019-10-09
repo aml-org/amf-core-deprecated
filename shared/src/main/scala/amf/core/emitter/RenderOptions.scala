@@ -17,7 +17,7 @@ class RenderOptions {
   private var filterFields: Field => Boolean = (_: Field) => false
   private var amfJsonLdSerialization         = true
   private var useJsonLdEmitter               = false
-  private var flattenedJsonLd                = true
+  private var flattenedJsonLd                = false
   private var eh: ErrorHandler               = UnhandledErrorHandler
   private var prettyPrint                    = false
   private var emitNodeIds                    = false

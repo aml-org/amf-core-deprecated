@@ -17,7 +17,7 @@ class RenderOptions {
   private var compactUris: Boolean   = false
   private var amfJsonLdSerialization = true
   private var prettyPrint            = false
-  private var flattenedJsonLd        = true
+  private var flattenedJsonLd        = false
   private var eh: ClientErrorHandler = ErrorHandlerConverter.asClient(UnhandledErrorHandler)
   private var emitNodeIds            = false
 
