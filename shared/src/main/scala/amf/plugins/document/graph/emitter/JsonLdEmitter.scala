@@ -262,11 +262,17 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
     }
   }
 
+  private def shouldReconstructInheritance(v: Value, parent: String) = {
+    val valueIsDeclared  = ctx.isDeclared(v.value)
+    val parentIsDeclared = ctx.isDeclared(parent)
+    !ctx.emittingDeclarations || (valueIsDeclared && parentIsDeclared)
+  }
+
+  private def isResolvedInheritance(v: Value) = v.value.annotations.contains(classOf[ResolvedInheritance])
+
   private def value(t: Type, v: Value, parent: String, sources: Value => Unit, b: Part[T]): Unit = {
     t match {
-      case _: ShapeModel
-          if v.value.annotations.contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx
-            .isDeclared(v.value)) && ctx.isDeclared(parent)) =>
+      case _: ShapeModel if isResolvedInheritance(v) && shouldReconstructInheritance(v, parent) =>
         extractToLink(v.value.asInstanceOf[Shape], b)
       case t: DomainElement with Linkable if t.isLink =>
         link(b, t)

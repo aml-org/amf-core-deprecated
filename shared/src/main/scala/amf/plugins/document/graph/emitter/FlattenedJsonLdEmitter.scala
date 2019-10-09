@@ -33,12 +33,46 @@ object FlattenedJsonLdEmitter {
 
 case class EmissionFn[T](fn: Part[T] => Unit)
 
+case class EmissionQueue[T]()(implicit ctx: EmissionContext) {
+  private val declarationsQueue: mutable.Queue[Either[AmfObject, EmissionFn[T]]]    = mutable.Queue.empty
+  private val nonDeclarationsQueue: mutable.Queue[Either[AmfObject, EmissionFn[T]]] = mutable.Queue.empty
+
+  def enqueue(amfObject: AmfObject): Unit = enqueue(Left(amfObject))
+
+  def enqueue(emissionFn: EmissionFn[T]): Unit = enqueue(Right(emissionFn))
+
+  def enqueue(queueElement: Either[AmfObject, EmissionFn[T]]): Unit = {
+    if (ctx.emittingDeclarations) {
+      declarationsQueue.enqueue(queueElement)
+    } else {
+      nonDeclarationsQueue.enqueue(queueElement)
+    }
+  }
+
+  def hasPendingDeclarations: Boolean = declarationsQueue.nonEmpty
+
+  def hasPendingNonDeclarations: Boolean = nonDeclarationsQueue.nonEmpty
+
+  def nextDeclaration(): Either[AmfObject, EmissionFn[T]] = declarationsQueue.dequeue()
+
+  def nextNonDeclaration(): Either[AmfObject, EmissionFn[T]] = nonDeclarationsQueue.dequeue()
+
+  def exists(p: Either[AmfObject, EmissionFn[T]] => Boolean): Boolean = {
+    if (ctx.emittingDeclarations) {
+      declarationsQueue.exists(p)
+    } else {
+      nonDeclarationsQueue.exists(p)
+    }
+  }
+
+}
+
 class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(implicit ctx: EmissionContext)
     extends MetaModelTypeMapping {
 
-  val pending: mutable.Queue[Either[AmfObject, EmissionFn[T]]] = mutable.Queue.empty
-  val seenIds: mutable.HashSet[String]                         = mutable.HashSet.empty
-  var root: Part[T]                                            = _
+  val pending: EmissionQueue[T]        = EmissionQueue()
+  val seenIds: mutable.HashSet[String] = mutable.HashSet.empty
+  var root: Part[T]                    = _
 
   def root(unit: BaseUnit): Unit = {
     val entry: Option[FieldEntry]      = unit.fields.entry(ModuleModel.Declares)
@@ -54,12 +88,20 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
 
           expandRoot(unit)
 
-          while (pending.nonEmpty) {
-            pending.dequeue() match {
+          ctx.emittingDeclarations(true)
+          while (pending.hasPendingDeclarations) {
+            pending.nextDeclaration() match {
               case Left(obj)       => expandObject(obj)
               case Right(emission) => emission.fn(rootBuilder)
             }
+          }
+          ctx.emittingDeclarations(false)
 
+          while (pending.hasPendingNonDeclarations) {
+            pending.nextNonDeclaration() match {
+              case Left(obj)       => expandObject(obj)
+              case Right(emission) => emission.fn(rootBuilder)
+            }
           }
           entry.foreach(e => unit.fields.setWithoutId(ModuleModel.Declares, e.array))
         }
@@ -321,12 +363,17 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
     }
   }
 
+  private def shouldReconstructInheritance(v: Value, parent: String) = {
+    val valueIsDeclared  = ctx.isDeclared(v.value)
+    val parentIsDeclared = ctx.isDeclared(parent)
+    !ctx.emittingDeclarations || (valueIsDeclared && parentIsDeclared)
+  }
+
+  private def isResolvedInheritance(v: Value) = v.value.annotations.contains(classOf[ResolvedInheritance])
+
   private def value(t: Type, v: Value, parent: String, sources: Value => Unit, b: Part[T]): Unit = {
     t match {
-      case _: ShapeModel
-          if v.value.annotations.contains(classOf[ResolvedInheritance]) &&
-            ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx.isDeclared(v.value)) && ctx.isDeclared(
-              parent)) =>
+      case _: ShapeModel if isResolvedInheritance(v) && shouldReconstructInheritance(v, parent) =>
         extractToLink(v.value.asInstanceOf[Shape], b)
       case t: DomainElement with Linkable if t.isLink =>
         link(b, t)
