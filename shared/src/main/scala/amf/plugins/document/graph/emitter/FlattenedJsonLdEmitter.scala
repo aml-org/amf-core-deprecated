@@ -25,7 +25,7 @@ import scala.collection.mutable.ListBuffer
 object FlattenedJsonLdEmitter {
 
   def emit[T](unit: BaseUnit, builder: DocBuilder[T], renderOptions: RenderOptions = RenderOptions()): Boolean = {
-    implicit val ctx: EmissionContext = EmissionContext(unit, renderOptions)
+    implicit val ctx: EmissionContext = FlattenedEmissionContext(unit, renderOptions)
     new FlattenedJsonLdEmitter[T](builder, renderOptions).root(unit)
     true
   }

@@ -50,14 +50,7 @@ class EmissionContext(val prefixes: mutable.Map[String, String],
 
   def emitIri(uri: String): String = if (shouldCompact) compactAndCollect(uri) else uri
 
-  def emitId(uri: String): String = {
-    if (shouldCompact) {
-      if (uri == base) "./"
-      else uri.replace(base, "")
-    } else {
-      uri
-    }
-  }
+  def emitId(uri: String): String = if (shouldCompact && uri.contains(base)) uri.replace(base, "") else uri
 
   def setupContextBase(location: String): Unit = {
     if (Option(location).isDefined) {
@@ -103,4 +96,24 @@ class EmissionContext(val prefixes: mutable.Map[String, String],
 object EmissionContext {
   def apply(unit: BaseUnit, options: RenderOptions) =
     new EmissionContext(mutable.Map(), unit.id, options)
+}
+
+class FlattenedEmissionContext(prefixes: mutable.Map[String, String],
+                               base: String,
+                               options: RenderOptions,
+                               emittingDeclarations: Boolean = false)
+    extends EmissionContext(prefixes, base, options, emittingDeclarations) {
+
+  override def emitId(uri: String): String = {
+    if (shouldCompact) {
+      if (uri == base) "./"
+      else uri.replace(base, "")
+    } else {
+      uri
+    }
+  }
+}
+
+object FlattenedEmissionContext {
+  def apply(unit: BaseUnit, options: RenderOptions) = new FlattenedEmissionContext(mutable.Map(), unit.id, options)
 }
