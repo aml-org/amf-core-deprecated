@@ -11,14 +11,21 @@ import org.scalatest.{AsyncFunSuite, Matchers}
 
 import scala.concurrent.{ExecutionContext, Future}
 
-trait GraphParserTest extends AsyncFunSuite with NativeOps with FileAssertionTest with BaseUnitConverter with Matchers with ElementsFixture{
+trait FlattenedGraphParserTest
+    extends AsyncFunSuite
+    with NativeOps
+    with FileAssertionTest
+    with BaseUnitConverter
+    with Matchers
+    with ElementsFixture {
 
   override implicit val executionContext: ExecutionContext = ExecutionContext.Implicits.global
 
-  test("Test parse simple document"){
+  test("Test parse simple document") {
     Core.init().asFuture.flatMap { _ =>
-      val golden = "shared/src/test/resources/parser/simple-document.jsonld"
+      val golden              = "shared/src/test/resources/parser/simple-document.flattened.jsonld"
       val f: Future[BaseUnit] = new AmfGraphParser().parseFileAsync("file://" + golden).asFuture
+
       f.map { u =>
         u.location shouldBe "file://" + golden
         u.isInstanceOf[Document] shouldBe true

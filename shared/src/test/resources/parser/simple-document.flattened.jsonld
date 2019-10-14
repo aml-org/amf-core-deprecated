@@ -1,0 +1,71 @@
+{
+  "@graph": [
+    {
+      "@id": "./",
+      "doc:declares": [
+        {
+          "@id": "amf://id3"
+        }
+      ],
+      "@type": [
+        "doc:Document",
+        "doc:Fragment",
+        "doc:Module",
+        "doc:Unit"
+      ],
+      "doc:encodes": {
+        "@id": "amf://id2"
+      },
+      "doc:version": "1.0.0"
+    },
+    {
+      "@id": "amf://id3",
+      "@type": [
+        "data:Array",
+        "rdf:Seq",
+        "data:Node",
+        "doc:DomainElement"
+      ],
+      "rdf:member": [
+        {
+          "@id": "amf://id4"
+        }
+      ]
+    },
+    {
+      "@id": "amf://id4",
+      "@type": [
+        "data:Scalar",
+        "data:Node",
+        "doc:DomainElement"
+      ],
+      "data:value": "myValue2",
+      "shacl:datatype": [
+        {
+          "@id": "http://www.w3.org/2001/XMLSchema#String"
+        }
+      ]
+    },
+    {
+      "@id": "amf://id2",
+      "@type": [
+        "data:Scalar",
+        "data:Node",
+        "doc:DomainElement"
+      ],
+      "data:value": "myValue",
+      "shacl:datatype": [
+        {
+          "@id": "http://www.w3.org/2001/XMLSchema#String"
+        }
+      ]
+    }
+  ],
+  "@context": {
+    "@base": "amf://id1",
+    "shacl": "http://www.w3.org/ns/shacl#",
+    "data": "http://a.ml/vocabularies/data#",
+    "doc": "http://a.ml/vocabularies/document#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+  }
+}

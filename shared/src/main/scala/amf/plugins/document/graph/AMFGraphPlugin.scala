@@ -13,11 +13,10 @@ import amf.core.rdf.{RdfModelDocument, RdfModelParser}
 import amf.core.remote.{Amf, Platform}
 import amf.core.resolution.pipelines.{BasicResolutionPipeline, ResolutionPipeline}
 import amf.core.unsafe.PlatformSecrets
-import amf.core.vocabulary.Namespace
 import amf.plugins.document.graph.emitter.JsonLdEmitter
-import amf.plugins.document.graph.parser.{GraphDependenciesReferenceHandler, GraphParser}
+import amf.plugins.document.graph.parser.{ExpandedGraphParser, FlattenedGraphParser, GraphDependenciesReferenceHandler}
 import org.yaml.builder.DocBuilder
-import org.yaml.model.{YDocument, YMap, YScalar, YSequence}
+import org.yaml.model.YDocument
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -50,23 +49,7 @@ object AMFGraphPlugin extends AMFDocumentPlugin with PlatformSecrets {
   override def canParse(root: Root): Boolean = {
     root.parsed match {
       case parsed: SyamlParsedDocument =>
-        val maybeMaps = parsed.document.node.toOption[Seq[YMap]]
-        val maybeMap  = maybeMaps.flatMap(s => s.headOption)
-        maybeMap match {
-          case Some(m: YMap) =>
-            val toDocumentNamespace: String => String = a => (Namespace.Document + a).iri()
-            val keys                                  = Seq("encodes", "declares", "references").map(toDocumentNamespace)
-            val types                                 = Seq("Document", "Fragment", "Module", "Unit").map(toDocumentNamespace)
-
-            val acceptedKeys  = keys ++ keys.map(Namespace.compact)
-            val acceptedTypes = types ++ types.map(Namespace.compact)
-            acceptedKeys.exists(m.key(_).isDefined) ||
-            m.key("@type").exists { typesEntry =>
-              val retrievedTypes = typesEntry.value.as[YSequence].nodes.map(node => node.as[YScalar].value)
-              (acceptedTypes intersect retrievedTypes).nonEmpty
-            }
-          case _ => false
-        }
+        FlattenedGraphParser.canParse(parsed) || ExpandedGraphParser.canParse(parsed)
       case _: RdfModelDocument => true
 
       case _ => false
@@ -75,8 +58,10 @@ object AMFGraphPlugin extends AMFDocumentPlugin with PlatformSecrets {
 
   override def parse(root: Root, ctx: ParserContext, platform: Platform, options: ParsingOptions): Option[BaseUnit] =
     root.parsed match {
-      case parsed: SyamlParsedDocument =>
-        Some(GraphParser(platform).parse(parsed.document, effectiveUnitUrl(root.location, options)))
+      case parsed: SyamlParsedDocument if FlattenedGraphParser.canParse(parsed) =>
+        Some(FlattenedGraphParser(platform).parse(parsed.document, effectiveUnitUrl(root.location, options)))
+      case parsed: SyamlParsedDocument if ExpandedGraphParser.canParse(parsed) =>
+        Some(ExpandedGraphParser(platform).parse(parsed.document, effectiveUnitUrl(root.location, options)))
       case parsed: RdfModelDocument =>
         Some(new RdfModelParser(platform)(ctx).parse(parsed.model, effectiveUnitUrl(root.location, options)))
       case _ =>
