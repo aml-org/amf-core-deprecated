@@ -300,7 +300,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
       case Right(_)        => false
     }
     if (needToExpand) {
-      pending.enqueue(Left(obj))
+      pending.enqueue(obj)
     }
   }
 
@@ -440,7 +440,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
                     if v.annotations
                       .contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx
                       .isDeclared(v) && ctx.isDeclared(parent))) =>
-                  extractToLink(v.asInstanceOf[Shape], b)
+                  extractToLink(v.asInstanceOf[Shape], b, true)
                 case elementInArray: DomainElement with Linkable if elementInArray.isLink =>
                   link(b, elementInArray, inArray = true)
                 case elementInArray =>
@@ -526,7 +526,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
     emit(b)
   }
 
-  private def extractToLink(shape: Shape, b: Part[T]): Unit = {
+  private def extractToLink(shape: Shape, b: Part[T], inArray: Boolean = false): Unit = {
     if (!ctx.isDeclared(shape)) {
       ctx + shape
       shape.name.option() match {
@@ -548,7 +548,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
         shape.link[Shape](shape.name.value())
     }
 
-    link(b, linked)
+    link(b, linked, inArray)
   }
 
   private def link(b: Part[T], elementWithLink: DomainElement with Linkable, inArray: Boolean = false): Unit = {
