@@ -86,7 +86,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
         _.list { rootBuilder =>
           root = rootBuilder
 
-          expandRoot(unit)
+          expandBaseUnit(unit)
 
           ctx.emittingDeclarations(true)
           while (pending.hasPendingDeclarations) {
@@ -124,7 +124,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
     ctx.emittingDeclarations(false)
   }
 
-  def expandRoot(unit: BaseUnit): Unit = {
+  def expandBaseUnit(unit: BaseUnit): Unit = {
     val id = unit.id
 
     root.obj { b =>
