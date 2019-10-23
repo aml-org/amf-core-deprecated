@@ -339,7 +339,7 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
                     if v.annotations
                       .contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx
                       .isDeclared(v) && ctx.isDeclared(parent))) =>
-                  extractToLink(v.asInstanceOf[Shape], b)
+                  extractToLink(v.asInstanceOf[Shape], b, true)
                 case elementInArray: DomainElement with Linkable if elementInArray.isLink =>
                   link(b, elementInArray, inArray = true)
                 case elementInArray =>
@@ -428,7 +428,7 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
     if (inArray) emit(b) else b.list(emit)
   }
 
-  private def extractToLink(shape: Shape, b: Part[T]): Unit = {
+  private def extractToLink(shape: Shape, b: Part[T], inArray: Boolean = false): Unit = {
     if (!ctx.isDeclared(shape)) {
       ctx + shape
       shape.name.option() match {
@@ -450,7 +450,7 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
         shape.link[Shape](shape.name.value())
     }
 
-    link(b, linked)
+    link(b, linked, inArray)
   }
 
   private def link(b: Part[T], elementWithLink: DomainElement with Linkable, inArray: Boolean = false): Unit = {
