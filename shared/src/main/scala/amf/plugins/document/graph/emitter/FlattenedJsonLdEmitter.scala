@@ -2,7 +2,7 @@ package amf.plugins.document.graph.emitter
 
 import amf.core.annotations._
 import amf.core.emitter.RenderOptions
-import amf.core.metamodel.Type.{Any, Array, Bool, EncodedIri, Iri, LiteralUri, SortedArray, Str}
+import amf.core.metamodel.Type.{Any, Array, ArrayLike, Bool, EncodedIri, Iri, LiteralUri, SortedArray, Str}
 import amf.core.metamodel._
 import amf.core.metamodel.document.{ModuleModel, SourceMapModel}
 import amf.core.metamodel.domain.extensions.DomainExtensionModel
@@ -15,6 +15,7 @@ import amf.core.model.domain.extensions.DomainExtension
 import amf.core.parser.{Annotations, FieldEntry, Value}
 import amf.core.utils._
 import amf.core.vocabulary.{Namespace, ValueType}
+import amf.plugins.document.graph.emitter.flattened.utils.{Emission, EmissionQueue, Metadata}
 import org.mulesoft.common.time.SimpleDateTime
 import org.yaml.builder.DocBuilder
 import org.yaml.builder.DocBuilder.{Entry, Part, SType, Scalar}
@@ -31,79 +32,47 @@ object FlattenedJsonLdEmitter {
   }
 }
 
-case class EmissionFn[T](fn: Part[T] => Unit)
-
-case class EmissionQueue[T]()(implicit ctx: EmissionContext) {
-  private val declarationsQueue: mutable.Queue[Either[AmfObject, EmissionFn[T]]]    = mutable.Queue.empty
-  private val nonDeclarationsQueue: mutable.Queue[Either[AmfObject, EmissionFn[T]]] = mutable.Queue.empty
-
-  def enqueue(amfObject: AmfObject): Unit = enqueue(Left(amfObject))
-
-  def enqueue(emissionFn: EmissionFn[T]): Unit = enqueue(Right(emissionFn))
-
-  def enqueue(queueElement: Either[AmfObject, EmissionFn[T]]): Unit = {
-    if (ctx.emittingDeclarations) {
-      declarationsQueue.enqueue(queueElement)
-    } else {
-      nonDeclarationsQueue.enqueue(queueElement)
-    }
-  }
-
-  def hasPendingDeclarations: Boolean = declarationsQueue.nonEmpty
-
-  def hasPendingNonDeclarations: Boolean = nonDeclarationsQueue.nonEmpty
-
-  def nextDeclaration(): Either[AmfObject, EmissionFn[T]] = declarationsQueue.dequeue()
-
-  def nextNonDeclaration(): Either[AmfObject, EmissionFn[T]] = nonDeclarationsQueue.dequeue()
-
-  def exists(p: Either[AmfObject, EmissionFn[T]] => Boolean): Boolean = {
-    if (ctx.emittingDeclarations) {
-      declarationsQueue.exists(p)
-    } else {
-      nonDeclarationsQueue.exists(p)
-    }
-  }
-
-}
 
 class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(implicit ctx: EmissionContext)
     extends MetaModelTypeMapping {
 
   val pending: EmissionQueue[T]        = EmissionQueue()
-  val seenIds: mutable.HashSet[String] = mutable.HashSet.empty
   var root: Part[T]                    = _
 
   def root(unit: BaseUnit): Unit = {
-    val entry: Option[FieldEntry]      = unit.fields.entry(ModuleModel.Declares)
-    val elements: Iterable[AmfElement] = entry.map(_.value.value.asInstanceOf[AmfArray].values).getOrElse(Nil)
-    ctx ++ elements
-    unit.fields.removeField(ModuleModel.Declares)
-
     builder.obj { ob =>
+      // Initialize root object
       ob.entry(
         "@graph",
         _.list { rootBuilder =>
           root = rootBuilder
+          /**
+            * First queue non declaration elements. We do this because these elements can generate new declarations that we
+            * need to know before emiting the Base Unit.
+            */
+          val entry: Option[FieldEntry]      = unit.fields.entry(ModuleModel.Declares)
+          val elements: Iterable[AmfElement] = entry.map(_.value.value.asInstanceOf[AmfArray].values).getOrElse(Nil)
+          ctx ++ elements
+          unit.fields.removeField(ModuleModel.Declares)
 
-          expandBaseUnit(unit)
+          queueBaseUnitElements(unit)
 
-          ctx.emittingDeclarations(true)
-          while (pending.hasPendingDeclarations) {
-            pending.nextDeclaration() match {
-              case Left(obj)       => expandObject(obj)
-              case Right(emission) => emission.fn(rootBuilder)
-            }
+          while (pending.hasPendingEmissions) {
+            val emission = pending.nextEmission()
+            emission.fn(root)
           }
-          ctx.emittingDeclarations(false)
 
-          while (pending.hasPendingNonDeclarations) {
-            pending.nextNonDeclaration() match {
-              case Left(obj)       => expandObject(obj)
-              case Right(emission) => emission.fn(rootBuilder)
-            }
+          /**
+            * Emit Base Unit. This will emit declarations also. We don't render the already rendered elements because
+            * the queue avoids duplicate ids
+            */
+          emitBaseUnit(unit)
+
+          // Check added declarations
+          while (pending.hasPendingEmissions) {
+            val emission = pending.nextEmission()
+            emission.fn(root)
           }
-          entry.foreach(e => unit.fields.setWithoutId(ModuleModel.Declares, e.array))
         }
       )
       ctx.emitContext(ob)
@@ -124,15 +93,30 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
     ctx.emittingDeclarations(false)
   }
 
-  def expandBaseUnit(unit: BaseUnit): Unit = {
+  def queueBaseUnitElements(unit: BaseUnit): Unit = {
+    unit.fields.foreach {
+      case (field, value) =>
+        field.`type` match {
+          case _ : Obj =>
+            val amfObject = value.value.asInstanceOf[AmfObject]
+            pending.tryEnqueue(amfObject)
+          case _: ArrayLike =>
+            val amfArray = value.value.asInstanceOf[AmfArray]
+            amfArray.values.foreach {
+              case amfObject: AmfObject => pending.tryEnqueue(amfObject)
+            }
+          case _ => // Ignore
+        }
+    }
+  }
+
+  def emitBaseUnit(unit: BaseUnit): Unit = {
     val id = unit.id
 
     root.obj { b =>
       createIdNode(b, id)
-      seenIds += id
       emitDeclarations(b, unit.id, SourceMap(unit.id, unit))
 
-      seenIds += id
       val sources = SourceMap(id, unit)
       val obj     = metaModel(unit)
       traverseMetaModel(id, unit, sources, obj, b)
@@ -151,31 +135,34 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
 
   }
 
-  def expandObject(amfObject: AmfObject): Unit = {
+  implicit def object2Emission(amfObject: AmfObject): Emission[T] with Metadata = {
     val id = amfObject.id
 
-    root.obj { b =>
-      createIdNode(b, id)
+    val e = new Emission[T](_ =>
+      root.obj { b =>
+        createIdNode(b, id)
 
-      seenIds += id
-      val sources = SourceMap(id, amfObject)
+        val sources = SourceMap(id, amfObject)
 
-      val obj = metaModel(amfObject)
+        val obj = metaModel(amfObject)
 
-      traverseMetaModel(id, amfObject, sources, obj, b)
+        traverseMetaModel(id, amfObject, sources, obj, b)
 
-      createCustomExtensions(amfObject, b)
+        createCustomExtensions(amfObject, b)
 
-      val sourceMapId = if (id.endsWith("/")) {
-        id + "source-map"
-      } else if (id.contains("#") || id.startsWith("null")) {
-        id + "/source-map"
-      } else {
-        id + "#/source-map"
-      }
-      createSourcesNode(sourceMapId, sources, b)
+        val sourceMapId = if (id.endsWith("/")) {
+          id + "source-map"
+        } else if (id.contains("#") || id.startsWith("null")) {
+          id + "/source-map"
+        } else {
+          id + "#/source-map"
+        }
+        createSourcesNode(sourceMapId, sources, b)
 
-    }
+    }) with Metadata
+    e.id = Some(id)
+    e.isDeclaration = ctx.emittingDeclarations
+    e
   }
 
   def traverseMetaModel(id: String, element: AmfObject, sources: SourceMap, obj: Obj, b: Entry[T]): Unit = {
@@ -288,20 +275,9 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
               emitScalar(_, f.value.iri())
           ))
 
-        expandIfNeeded(extension.extension)
+        pending.tryEnqueue(extension.extension)
       }
     )
-  }
-
-  private def expandIfNeeded(obj: AmfObject): Unit = {
-    val id = obj.id
-    val needToExpand = !seenIds.contains(id) && !pending.exists {
-      case Left(amfObject) => amfObject.id == id
-      case Right(_)        => false
-    }
-    if (needToExpand) {
-      pending.enqueue(obj)
-    }
   }
 
   def createSortedArray(b: Part[T],
@@ -521,7 +497,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
   private def obj(b: Part[T], obj: AmfObject, inArray: Boolean = false): Unit = {
     def emit(b: Part[T]): Unit = {
       b.obj(createIdNode(_, obj.id))
-      expandIfNeeded(obj)
+      pending.tryEnqueue(obj)
     }
     emit(b)
   }
@@ -563,7 +539,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
 
       b.obj { o =>
         createIdNode(o, elementWithLink.id)
-        expandIfNeeded(elementWithLink)
+        pending.tryEnqueue(elementWithLink)
       }
       // we reset the link target after emitting
       savedLinkTarget.foreach { target =>
@@ -636,17 +612,17 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
             _.obj { b =>
               // TODO: Maybe this should be emitted in root
               createIdNode(b, id)
-              if (!seenIds.contains(id)) {
-                val fn = EmissionFn((part: Part[T]) => {
-                  part.obj { rb =>
-                    createIdNode(rb, id)
-                    createTypeNode(rb, SourceMapModel, None)
-                    createAnnotationNodes(rb, sources.annotations)
-                    createAnnotationNodes(rb, sources.eternals)
-                  }
-                })
-                pending.enqueue(Right(fn))
-              }
+              val e = new Emission((part: Part[T]) => {
+                part.obj { rb =>
+                  createIdNode(rb, id)
+                  createTypeNode(rb, SourceMapModel, None)
+                  createAnnotationNodes(rb, sources.annotations)
+                  createAnnotationNodes(rb, sources.eternals)
+                }
+              }) with Metadata
+              e.id = Some(id)
+              e.isDeclaration = ctx.emittingDeclarations
+              pending.tryEnqueue(e)
             }
           }
         )
@@ -674,16 +650,17 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
           _.list {
             _.obj { b =>
               createIdNode(b, id)
-              if (!seenIds.contains(id)) {
-                val fn = EmissionFn((part: Part[T]) => {
-                  part.obj { rb =>
-                    createIdNode(rb, id)
-                    createTypeNode(rb, SourceMapModel, None)
-                    createAnnotationNodes(rb, sources.eternals)
-                  }
-                })
-                pending.enqueue(Right(fn))
-              }
+              val e = new Emission((part: Part[T]) => {
+                part.obj { rb =>
+                  createIdNode(rb, id)
+                  createTypeNode(rb, SourceMapModel, None)
+                  createAnnotationNodes(rb, sources.eternals)
+                }
+              }) with Metadata
+
+              e.id = Some(id)
+              e.isDeclaration = ctx.emittingDeclarations
+              pending.tryEnqueue(e)
             }
           }
         )
