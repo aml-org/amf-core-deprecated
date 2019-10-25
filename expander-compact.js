@@ -41,7 +41,8 @@ function populateCache(graph, cache) {
 }
 
 function normalize(graph) {
-    return [graph[0]];
+    const baseUnit = graph.filter(x => x['@id'] === "./")[0]
+    return [baseUnit];
 }
 
 function replaceIdReference(element, key, cache) {

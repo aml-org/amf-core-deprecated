@@ -48,7 +48,8 @@ exports.expander = class JsonLdExpander {
         })
     }
     static normalize(graph) {
-        return [graph[0]]
+        const baseUnit = graph.filter(x => x['@id'] === "./")[0]
+        return [baseUnit]
     }
     static replaceIdReference(element, key, cache) {
         const linkObject = element[key]
