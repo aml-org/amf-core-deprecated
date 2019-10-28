@@ -11,13 +11,13 @@ exports.expander = class JsonLdExpander {
                 const current = graph[i]
                 const id = current['@id']
                 cache[id] = current
-                JsonLdExpander.traverse(current, cache)
+                JsonLdExpander.traverse(current, cache, context)
             }
             return JsonLdExpander.normalize(graph, context)
         } else return f
     }
 
-    static traverse(element, cache) {
+    static traverse(element, cache, context) {
         Object.keys(element).forEach(key => {
             const value = element[key]
             if (typeof value === 'object' && value !== null && !key.endsWith("link-target") && !key.endsWith("reference-id") && !key.endsWith("fixPoint")) {
@@ -25,6 +25,14 @@ exports.expander = class JsonLdExpander {
                 if (isArray) {
                     if (this.isArrayOfLinks(value)) {
                         JsonLdExpander.replaceIdReferencesInArray(element, key, cache)
+                    } else if (key.endsWith('tracked-element')  || key.endsWith('parsed-json-schema')) {
+                        let val = element[key]
+                        const elementKey    = this.compact('element', 'http://a.ml/vocabularies/document-source-maps#', context)
+                        const valueKey      = this.compact('value', 'http://a.ml/vocabularies/document-source-maps#', context)
+                        val[0][elementKey]  = [this.normalizeValue(val[0][elementKey])]
+                        val[0][valueKey]    = [this.normalizeValue(val[0][valueKey])]
+                    } else if(key.endsWith('in')){ // shacl in
+                        JsonLdExpander.traverse(element[key][0], cache, context)
                     } else if (key !== "@type") {
                         element[key] = element[key].map(value => this.normalizeValue(value))
                     }
@@ -32,10 +40,20 @@ exports.expander = class JsonLdExpander {
                 } else {
                     JsonLdExpander.replaceIdReference(element, key, cache)
                 }
-            } else if((typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') && key !== '@id') {
+            } else if((typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') && key !== '@id' && key !== '@type') {
                 element[key] = [this.normalizeValue(value)]
             }
         })
+    }
+
+    static compact(key, prefix, context) {
+        const retrieved = Object.entries(context).filter(entry => entry[1] === prefix)[0];
+        if (retrieved) {
+            const term = retrieved[0]
+            return term + ":" + key
+        } else {
+            return prefix + key
+        }
     }
 
     static normalizeValue(value) {
@@ -73,13 +91,6 @@ exports.expander = class JsonLdExpander {
             } else {
                 return element
             }
-        } else if(element['http://a.ml/vocabularies/document-source-maps#element'] && element['http://a.ml/vocabularies/document-source-maps#value']){
-            // annotations expansion to @value
-            const elementKey = 'http://a.ml/vocabularies/document-source-maps#element'
-            const valueKey = 'http://a.ml/vocabularies/document-source-maps#value'
-            element[elementKey] = [{'@value': element[elementKey]}]
-            element[valueKey] = [{'@value': element[valueKey]}]
-            return element
         } else {
             return element
         }
