@@ -71,6 +71,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
           // Check added declarations
           while (pending.hasPendingEmissions) {
             val emission = pending.nextEmission()
+            ctx.emittingDeclarations = emission.isDeclaration
             emission.fn(root)
           }
         }
