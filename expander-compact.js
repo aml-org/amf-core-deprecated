@@ -5,6 +5,7 @@ expand(flattened);
 function expand(flattened) {
     const f = JSON.parse(flattened);
     const graph = f['@graph'];
+    const context = f['@context'];
     const cache = {};
 
     populateCache(graph, cache);
@@ -15,7 +16,7 @@ function expand(flattened) {
         cache[id] = current;
         traverse(current, cache)
     }
-    const result = normalize(graph);
+    const result = normalize(graph, context);
     fs.writeFileSync("path", JSON.stringify(result, undefined, 2)) // TODO fill me
 }
 
@@ -40,8 +41,11 @@ function populateCache(graph, cache) {
     })
 }
 
-function normalize(graph) {
+function normalize(graph, context) {
     const baseUnit = graph.filter(x => x['@id'] === "./")[0]
+    if (context) {
+        baseUnit['@context'] = context
+    }
     return [baseUnit];
 }
 

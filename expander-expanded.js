@@ -3,6 +3,7 @@ exports.expander = class JsonLdExpander {
     static expand(flattened) {
         const f = JSON.parse(flattened)
         const graph = f['@graph']
+        const context = f['@context']
         if (graph) {
             const cache = {}
             JsonLdExpander.populateCache(graph, cache)
@@ -12,7 +13,7 @@ exports.expander = class JsonLdExpander {
                 cache[id] = current
                 JsonLdExpander.traverse(current, cache)
             }
-            return JsonLdExpander.normalize(graph)
+            return JsonLdExpander.normalize(graph, context)
         } else return f
     }
 
@@ -47,8 +48,12 @@ exports.expander = class JsonLdExpander {
             cache[id] = element
         })
     }
-    static normalize(graph) {
+    static normalize(graph, context) {
         const baseUnit = graph.filter(x => x['@id'] === "./")[0]
+        if (context) {
+            baseUnit['@context'] = context
+
+        }
         return [baseUnit]
     }
     static replaceIdReference(element, key, cache) {
