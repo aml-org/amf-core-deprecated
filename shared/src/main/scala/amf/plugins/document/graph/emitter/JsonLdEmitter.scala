@@ -262,17 +262,18 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
     }
   }
 
-  private def shouldReconstructInheritance(v: Value, parent: String) = {
-    val valueIsDeclared  = ctx.isDeclared(v.value)
+  private def shouldReconstructInheritance(v: AmfElement, parent: String) = {
+    val valueIsDeclared  = ctx.isDeclared(v)
     val parentIsDeclared = ctx.isDeclared(parent)
     !ctx.emittingDeclarations || (valueIsDeclared && parentIsDeclared)
   }
 
-  private def isResolvedInheritance(v: Value) = v.value.annotations.contains(classOf[ResolvedInheritance])
+  private def isResolvedInheritance(v: AmfElement) = v.annotations.contains(classOf[ResolvedInheritance])
+
 
   private def value(t: Type, v: Value, parent: String, sources: Value => Unit, b: Part[T]): Unit = {
     t match {
-      case _: ShapeModel if isResolvedInheritance(v) && shouldReconstructInheritance(v, parent) =>
+      case _: ShapeModel if isResolvedInheritance(v.value) && shouldReconstructInheritance(v.value, parent) =>
         extractToLink(v.value.asInstanceOf[Shape], b)
       case t: DomainElement with Linkable if t.isLink =>
         link(b, t)
@@ -336,9 +337,7 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
             case _: Obj =>
               seq.values.asInstanceOf[Seq[AmfObject]].foreach {
                 case v @ (_: Shape)
-                    if v.annotations
-                      .contains(classOf[ResolvedInheritance]) && ((!ctx.emittingDeclarations) || (ctx.emittingDeclarations && ctx
-                      .isDeclared(v) && ctx.isDeclared(parent))) =>
+                    if isResolvedInheritance(v) && shouldReconstructInheritance(v, parent) =>
                   extractToLink(v.asInstanceOf[Shape], b, true)
                 case elementInArray: DomainElement with Linkable if elementInArray.isLink =>
                   link(b, elementInArray, inArray = true)
