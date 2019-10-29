@@ -47,13 +47,18 @@ exports.expander = class JsonLdExpander {
     }
 
     static compact(key, prefix, context) {
-        const retrieved = Object.entries(context).filter(entry => entry[1] === prefix)[0];
-        if (retrieved) {
-            const term = retrieved[0]
-            return term + ":" + key
+        if (context) {
+            const retrieved = Object.entries(context).filter(entry => entry[1] === prefix)[0];
+            if (retrieved) {
+                const term = retrieved[0]
+                return term + ":" + key
+            } else {
+                return prefix + key
+            }
         } else {
             return prefix + key
         }
+
     }
 
     static normalizeValue(value) {
