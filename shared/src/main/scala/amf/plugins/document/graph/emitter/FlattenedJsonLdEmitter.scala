@@ -141,29 +141,33 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
 
     val e = new Emission[T](_ =>
       root.obj { b =>
-        createIdNode(b, id)
-
-        val sources = SourceMap(id, amfObject)
-
-        val obj = metaModel(amfObject)
-
-        traverseMetaModel(id, amfObject, sources, obj, b)
-
-        createCustomExtensions(amfObject, b)
-
-        val sourceMapId = if (id.endsWith("/")) {
-          id + "source-map"
-        } else if (id.contains("#") || id.startsWith("null")) {
-          id + "/source-map"
-        } else {
-          id + "#/source-map"
-        }
-        createSourcesNode(sourceMapId, sources, b)
-
+        emitObject(amfObject, b)
     }) with Metadata
     e.id = Some(id)
     e.isDeclaration = ctx.emittingDeclarations
     e
+  }
+
+  def emitObject(amfObject: AmfObject, b: Entry[T]): Unit = {
+    val id = amfObject.id
+    createIdNode(b, id)
+
+    val sources = SourceMap(id, amfObject)
+
+    val obj = metaModel(amfObject)
+
+    traverseMetaModel(id, amfObject, sources, obj, b)
+
+    createCustomExtensions(amfObject, b)
+
+    val sourceMapId = if (id.endsWith("/")) {
+      id + "source-map"
+    } else if (id.contains("#") || id.startsWith("null")) {
+      id + "/source-map"
+    } else {
+      id + "#/source-map"
+    }
+    createSourcesNode(sourceMapId, sources, b)
   }
 
   def traverseMetaModel(id: String, element: AmfObject, sources: SourceMap, obj: Obj, b: Entry[T]): Unit = {
@@ -265,18 +269,25 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
     b.entry(
       uri,
       _.obj { b =>
-        b.entry(
-          ctx.emitIri(DomainExtensionModel.Name.value.iri()),
-          emitScalar(_, extension.name.value())
-        )
-        field.foreach(
-          f =>
-            b.entry(
-              ctx.emitIri(DomainExtensionModel.Element.value.iri()),
-              emitScalar(_, f.value.iri())
-          ))
-
-        pending.tryEnqueue(extension.extension)
+        createIdNode(b, extension.extension.id)
+        val e = new Emission((part: Part[T]) => {
+          part.obj { rb =>
+            rb.entry(
+              ctx.emitIri(DomainExtensionModel.Name.value.iri()),
+              emitScalar(_, extension.name.value())
+            )
+            field.foreach(
+              f =>
+                rb.entry(
+                  ctx.emitIri(DomainExtensionModel.Element.value.iri()),
+                  emitScalar(_, f.value.iri())
+                ))
+            emitObject(extension.extension, rb)
+          }
+        }) with Metadata
+        e.id = Some(extension.extension.id)
+        e.isDeclaration = ctx.emittingDeclarations
+        pending.tryEnqueue(e)
       }
     )
   }
