@@ -33,7 +33,7 @@ exports.expander = class JsonLdExpander {
                         val[0][valueKey]    = [this.normalizeValue(val[0][valueKey])]
                     } else if(key.endsWith('in') || key.endsWith('items')){ // shacl in
                         JsonLdExpander.traverse(element[key][0], cache, context)
-                    } else if (key !== "@type") {
+                    } else if (key !== "@type" && !key.endsWith('customDomainProperties')) {
                         element[key] = element[key].map(value => this.normalizeValue(value))
                     }
 
