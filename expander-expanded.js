@@ -23,7 +23,7 @@ exports.expander = class JsonLdExpander {
             if (typeof value === 'object' && value !== null && !key.endsWith("link-target") && !key.endsWith("reference-id") && !key.endsWith("fixPoint")) {
                 const isArray = Array.isArray(value)
                 if (isArray) {
-                    if (this.isArrayOfLinks(value)) {
+                    if (this.isArrayOfLinks(key, value)) {
                         JsonLdExpander.replaceIdReferencesInArray(element, key, cache)
                     } else if (key.endsWith('tracked-element')  || key.endsWith('parsed-json-schema')) {
                         let val = element[key]
@@ -31,7 +31,7 @@ exports.expander = class JsonLdExpander {
                         const valueKey      = this.compact('value', 'http://a.ml/vocabularies/document-source-maps#', context)
                         val[0][elementKey]  = [this.normalizeValue(val[0][elementKey])]
                         val[0][valueKey]    = [this.normalizeValue(val[0][valueKey])]
-                    } else if(key.endsWith('in')){ // shacl in
+                    } else if(key.endsWith('in') || key.endsWith('items')){ // shacl in
                         JsonLdExpander.traverse(element[key][0], cache, context)
                     } else if (key !== "@type") {
                         element[key] = element[key].map(value => this.normalizeValue(value))
@@ -104,8 +104,8 @@ exports.expander = class JsonLdExpander {
         return element['@id'] !== undefined && Object.keys(element).length === 1
     }
 
-    static isArrayOfLinks(array) {
-        return array.every(element => this.isLinkObject(element));
+    static isArrayOfLinks(field, array) {
+        return !field.endsWith('customDomainProperties') && array.every(element => this.isLinkObject(element));
     }
 
     static retrieveLinkTargetFrom(linkObject, cache) {
