@@ -27,8 +27,8 @@ exports.expander = class JsonLdExpander {
                         JsonLdExpander.replaceIdReferencesInArray(element, key, cache)
                     } else if (key.endsWith('tracked-element')  || key.endsWith('parsed-json-schema')) {
                         let val = element[key]
-                        const elementKey    = this.compact('element', 'http://a.ml/vocabularies/document-source-maps#', context)
-                        const valueKey      = this.compact('value', 'http://a.ml/vocabularies/document-source-maps#', context)
+                        const elementKey    = this.compactName('element', 'http://a.ml/vocabularies/document-source-maps#', context)
+                        const valueKey      = this.compactName('value', 'http://a.ml/vocabularies/document-source-maps#', context)
                         val[0][elementKey]  = [this.normalizeValue(val[0][elementKey])]
                         val[0][valueKey]    = [this.normalizeValue(val[0][valueKey])]
                     } else if(key.endsWith('in') || key.endsWith('items')){ // shacl in
@@ -38,7 +38,8 @@ exports.expander = class JsonLdExpander {
                     }
 
                 } else {
-                    JsonLdExpander.replaceIdReference(element, key, cache)
+                    const wrapInArray = !this.keyIsCustomDomainProperty(key, element, context)
+                    JsonLdExpander.replaceIdReference(element, key, cache, wrapInArray)
                 }
             } else if((typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') && key !== '@id' && key !== '@type') {
                 element[key] = [this.normalizeValue(value)]
@@ -46,9 +47,27 @@ exports.expander = class JsonLdExpander {
         })
     }
 
-    static compact(key, prefix, context) {
+    static keyIsCustomDomainProperty(key, element, context) {
+        const customProperties = Object.entries(element).filter(entry => entry[0].endsWith('customDomainProperties'))[0]
+        if (customProperties) {
+            return customProperties[1].filter(customProp => this.expandName(customProp['@id'], context) === key).length > 0
+        } else {
+            return false
+        }
+
+    }
+
+    static expandName(key, context) {
+        if (context !== undefined &&  context['@base'] !== undefined) {
+            return context['@base'] + key
+        } else {
+            return key
+        }
+    }
+
+    static compactName(key, prefix, context) {
         if (context) {
-            const retrieved = Object.entries(context).filter(entry => entry[1] === prefix)[0];
+            const retrieved = Object.entries(context).filter(entry => entry[1] === prefix)[0]
             if (retrieved) {
                 const term = retrieved[0]
                 return term + ":" + key
@@ -79,10 +98,14 @@ exports.expander = class JsonLdExpander {
         }
         return [baseUnit]
     }
-    static replaceIdReference(element, key, cache) {
+    static replaceIdReference(element, key, cache, wrapInArray) {
         const linkObject = element[key]
         const retrievedTarget = JsonLdExpander.retrieveIfIsLink(linkObject, cache)
-        element[key] = [retrievedTarget]
+        if (wrapInArray) {
+            element[key] = [retrievedTarget]
+        } else {
+            element[key] = retrievedTarget
+        }
     }
     static replaceIdReferencesInArray(element, key, cache) {
         const links = element[key]
@@ -105,7 +128,7 @@ exports.expander = class JsonLdExpander {
     }
 
     static isArrayOfLinks(field, array) {
-        return !field.endsWith('customDomainProperties') && array.every(element => this.isLinkObject(element));
+        return !field.endsWith('customDomainProperties') && array.every(element => this.isLinkObject(element))
     }
 
     static retrieveLinkTargetFrom(linkObject, cache) {
