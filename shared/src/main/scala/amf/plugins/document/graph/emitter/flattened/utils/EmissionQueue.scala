@@ -49,6 +49,6 @@ case class EmissionQueue[T]() {
     * @param e emission
     * @return
     */
-  def accepts(e: Emission[T] with Metadata): Boolean = e.id.exists { id => knownIds.contains(id) }
+  def accepts(e: Emission[T] with Metadata): Boolean = !e.id.exists { id => knownIds.contains(id) }
 
 }
