@@ -50,7 +50,10 @@ exports.expander = class JsonLdExpander {
     static keyIsCustomDomainProperty(key, element, context) {
         const customProperties = Object.entries(element).filter(entry => entry[0].endsWith('customDomainProperties'))[0]
         if (customProperties) {
-            return customProperties[1].filter(customProp => this.expandName(customProp['@id'], context) === key).length > 0
+            return customProperties[1].filter(
+                customProp =>
+                    this.expandName(customProp['@id'], context) === key || customProp['@id'] === key
+            ).length > 0
         } else {
             return false
         }
