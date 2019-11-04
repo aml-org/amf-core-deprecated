@@ -611,8 +611,8 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
         b.entry(
           "smaps",
           _.obj { b =>
-            createAnnotationNodes(b, sources.annotations)
-            createAnnotationNodes(b, sources.eternals)
+            createAnnotationNodes(id, b, sources.annotations)
+            createAnnotationNodes(id, b, sources.eternals)
           }
         )
       } else {
@@ -626,8 +626,8 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
                 part.obj { rb =>
                   createIdNode(rb, id)
                   createTypeNode(rb, SourceMapModel, None)
-                  createAnnotationNodes(rb, sources.annotations)
-                  createAnnotationNodes(rb, sources.eternals)
+                  createAnnotationNodes(id, rb, sources.annotations)
+                  createAnnotationNodes(id, rb, sources.eternals)
                 }
               }) with Metadata
               e.id = Some(id)
@@ -651,7 +651,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
         b.entry(
           "smaps",
           _.obj { b =>
-            createAnnotationNodes(b, sources.eternals)
+            createAnnotationNodes(id, b, sources.eternals)
           }
         )
       } else {
@@ -664,7 +664,7 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
                 part.obj { rb =>
                   createIdNode(rb, id)
                   createTypeNode(rb, SourceMapModel, None)
-                  createAnnotationNodes(rb, sources.eternals)
+                  createAnnotationNodes(id, rb, sources.eternals)
                 }
               }) with Metadata
 
@@ -677,7 +677,8 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
       }
   }
 
-  private def createAnnotationNodes(b: Entry[T],
+  private def createAnnotationNodes(id: String,
+                                     b: Entry[T],
                                     annotations: mutable.ListMap[String, mutable.ListMap[String, String]]): Unit = {
     annotations.foreach({
       case (a, values) =>
@@ -697,19 +698,28 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
         } else {
           b.entry(
             ctx.emitIri(ValueType(Namespace.SourceMaps, a).iri()),
-            _.list(b => values.foreach(createAnnotationValueNode(b, _)))
+            _.list(b => values.foreach(createAnnotationValueNode(s"$id/$a", b, _)))
           )
         }
     })
   }
 
-  private def createAnnotationValueNode(b: Part[T], tuple: (String, String)): Unit =
+  private def createAnnotationValueNode(id: String, b: Part[T], tuple: (String, String)): Unit =
     tuple match {
       case (iri, v) =>
         b.obj { b =>
-          b.entry(ctx.emitIri(SourceMapModel.Element.value.iri()), emitScalar(_, iri))
-          b.entry(ctx.emitIri(SourceMapModel.Value.value.iri()), emitScalar(_, v))
+          createIdNode(b, id)
         }
+        val e = new Emission((part: Part[T]) => {
+          part.obj { b =>
+            createIdNode(b, id)
+            b.entry(ctx.emitIri(SourceMapModel.Element.value.iri()), emitScalar(_, iri))
+            b.entry(ctx.emitIri(SourceMapModel.Value.value.iri()), emitScalar(_, v))
+          }
+        }) with Metadata
+        e.id = Some(id)
+        e.isDeclaration = ctx.emittingDeclarations
+        pending.tryEnqueue(e)
     }
 
   private def emitDateFormat(dateTime: SimpleDateTime) = dateTime.rfc3339
