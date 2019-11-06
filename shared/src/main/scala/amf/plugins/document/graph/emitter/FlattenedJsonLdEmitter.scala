@@ -19,6 +19,7 @@ import amf.plugins.document.graph.emitter.flattened.utils.{Emission, EmissionQue
 import org.mulesoft.common.time.SimpleDateTime
 import org.yaml.builder.DocBuilder
 import org.yaml.builder.DocBuilder.{Entry, Part, SType, Scalar}
+import scala.language.implicitConversions
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer

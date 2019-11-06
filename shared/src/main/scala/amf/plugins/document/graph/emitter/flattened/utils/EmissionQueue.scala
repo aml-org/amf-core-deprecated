@@ -30,7 +30,7 @@ case class EmissionQueue[T]() {
       e.id.map { id =>
         knownIds += id
       }
-      Success()
+      Success((): Unit)
     } else {
       Failure(new IllegalArgumentException("Element already emitted"))
     }
