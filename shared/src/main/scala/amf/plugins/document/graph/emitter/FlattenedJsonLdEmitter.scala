@@ -699,7 +699,10 @@ class FlattenedJsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderO
         } else {
           b.entry(
             ctx.emitIri(ValueType(Namespace.SourceMaps, a).iri()),
-            _.list(b => values.foreach(createAnnotationValueNode(s"$id/$a", b, _)))
+            _.list(b => values.zipWithIndex.foreach {
+              case (tuple, index) =>
+                createAnnotationValueNode(s"$id/$a/element_$index", b, tuple)
+            })
           )
         }
     })

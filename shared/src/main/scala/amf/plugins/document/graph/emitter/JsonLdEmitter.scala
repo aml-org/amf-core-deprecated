@@ -270,7 +270,6 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
 
   private def isResolvedInheritance(v: AmfElement) = v.annotations.contains(classOf[ResolvedInheritance])
 
-
   private def value(t: Type, v: Value, parent: String, sources: Value => Unit, b: Part[T]): Unit = {
     t match {
       case _: ShapeModel if isResolvedInheritance(v.value) && shouldReconstructInheritance(v.value, parent) =>
@@ -593,7 +592,10 @@ class JsonLdEmitter[T](val builder: DocBuilder[T], val options: RenderOptions)(i
         } else {
           b.entry(
             ctx.emitIri(ValueType(Namespace.SourceMaps, a).iri()),
-            _.list(b => values.foreach(createAnnotationValueNode(s"$id/$a", b, _)))
+            _.list(b => values.zipWithIndex.foreach {
+              case (tuple, index) =>
+                createAnnotationValueNode(s"$id/$a/element_$index", b, tuple)
+            })
           )
         }
     })
