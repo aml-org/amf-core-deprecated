@@ -10,7 +10,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 @JSExportAll
 case class Annotations(_internal: InternalAnnotations) {
 
-  @JSExportTopLevel("Annotations")
+  @JSExportTopLevel("model.Annotations")
   def this() = this(InternalAnnotations())
 
   def lexical(): Range = _internal.find(classOf[LexicalInformation]).map(_.range).getOrElse(Range.NONE)

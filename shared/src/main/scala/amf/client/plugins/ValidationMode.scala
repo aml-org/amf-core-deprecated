@@ -1,8 +1,5 @@
 package amf.client.plugins
 
-import amf.core.model.document.PayloadFragment
-import amf.core.validation.AMFValidationResult
-
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportAll

@@ -11,7 +11,7 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 @JSExportAll
 case class Environment(private[amf] val _internal: InternalEnvironment) {
 
-  @JSExportTopLevel("Environment")
+  @JSExportTopLevel("client.environment.Environment")
   def this() = this(InternalEnvironment.empty())
 
   def loaders: ClientList[ResourceLoader]        = _internal.loaders.asClient

@@ -1,12 +1,11 @@
 package amf.client.environment
 
-import amf.core.unsafe.PlatformSecrets
 import amf.client.convert.CoreClientConverters._
-import amf.client.resource
+import amf.core.unsafe.PlatformSecrets
 
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
-@JSExportTopLevel("DefaultEnvironment")
+@JSExportTopLevel("client.DefaultEnvironment")
 object DefaultEnvironment extends PlatformSecrets {
   @JSExport("apply")
   def apply(): Environment = {
