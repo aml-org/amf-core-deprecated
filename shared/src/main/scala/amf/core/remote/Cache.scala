@@ -42,35 +42,47 @@ class Cache {
     }
   }
 
+  def checkCachedAndCompleted(url: String): Option[Future[BaseUnit]] = {
+    cache synchronized {
+      cache.get(url) match {
+        case Some(unitParsingProcess) if unitParsingProcess.isCompleted => Some(unitParsingProcess)
+        case _ => None
+      }
+    }
+  }
+
   def getOrUpdate(url: String, context: Context)(supplier: () => Future[BaseUnit]): Future[BaseUnit] = synchronized {
     beforeLast(context.history) foreach { from =>
       addFromToEdge(from, url)
     }
     findCycles(url) match {
       case Some(_) =>
-        if (cache(url).isCompleted) {
-          cache(url)
-        } else {
-          cache.remove(url)
-          supplier() map { res =>
-            update(url, Future(res))
-            res
-          }
+        checkCachedAndCompleted(url) match {
+          case Some(unit) => unit
+          case _          =>
+            supplier() map { res =>
+              update(url, Future(res))
+              res
+            }
         }
       case _           =>
         cache.get(url) match {
           case Some(value) =>
             value
           case None =>
-            val futureUnit = supplier()
-            update(url, futureUnit)
-            futureUnit
+            cache.synchronized {
+              val futureUnit = supplier()
+              update(url, futureUnit)
+              futureUnit
+            }
         }
     }
   }
 
   private def update(url: String, value: Future[BaseUnit]): Unit = synchronized {
-    cache.update(url, value)
+    cache synchronized {
+      cache.update(url, value)
+    }
   }
 
   protected def size: Int = cache.size
